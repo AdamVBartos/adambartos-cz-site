@@ -1,0 +1,68 @@
+# ============================================================================
+# adambartos.cz: Apache na WEDOS webhostingu
+# Statický export Next.js (složka out/) + kontakt.php.
+#
+# Všechny bloky jsou v <IfModule>: když hosting nějaký modul nemá, blok se
+# přeskočí a web dál běží. Kdyby po nahrání přišla chyba 500 nebo smyčka
+# přesměrování, smažte nejdřív blok „1) HTTPS a www“ (viz README, „Když něco nejede“).
+# ============================================================================
+
+AddDefaultCharset UTF-8
+Options -Indexes
+ErrorDocument 404 /404.html
+
+# --- 1) HTTPS a www -------------------------------------------------------------
+# Kanonická adresa je https://adambartos.cz (bez www).
+# HTTP → HTTPS zachovává hostitele z požadavku (funguje i na náhledové doméně
+# hostingu), přesměruje se jen tehdy, když požadavek není HTTPS ani přes proxy
+# (X-Forwarded-Proto). Pravidlo www → bez www platí jen pro www.adambartos.cz.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  RewriteCond %{HTTP_HOST} ^www\.adambartos\.cz$ [NC]
+  RewriteRule ^ https://adambartos.cz%{REQUEST_URI} [L,R=301]
+
+  # soubory ve /_next/static/ mají v názvu otisk obsahu → smí se cachovat „navždy“
+  RewriteRule ^_next/static/ - [E=IMMUTABLE_ASSET:1]
+</IfModule>
+
+# --- 2) Bezpečnostní hlavičky ---------------------------------------------------
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  Header always set Strict-Transport-Security "max-age=31536000"
+
+  # 'unsafe-inline' je nutné: Next.js vkládá do HTML malé inline skripty a
+  # styly (statický export neumí nonce). Vše ostatní je jen z vlastní domény.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+</IfModule>
+
+# --- 3) Cache -------------------------------------------------------------------
+<IfModule mod_headers.c>
+  # HTML se vždy ověřuje (po nahrání nové verze ji návštěvník hned uvidí)
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  Header set Cache-Control "public, max-age=31536000, immutable" env=IMMUTABLE_ASSET
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/svg+xml "access plus 1 month"
+  ExpiresByType image/png "access plus 1 month"
+  ExpiresByType image/jpeg "access plus 1 month"
+  ExpiresByType image/webp "access plus 1 month"
+</IfModule>
+
+# --- 4) Komprese ----------------------------------------------------------------
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml application/xml application/json application/javascript text/javascript image/svg+xml
+</IfModule>

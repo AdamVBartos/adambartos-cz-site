@@ -1,0 +1,5 @@
+User-Agent: *
+Allow: /
+
+Host: https://adambartos.cz
+Sitemap: https://adambartos.cz/sitemap.xml
